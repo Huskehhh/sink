@@ -105,6 +105,7 @@ public class SinkProcessor {
         if (dirty) {
             try {
                 mySQL.update(buildInsert());
+                dirty = false;
             } catch (SQLException throwables) {
                 throwables.printStackTrace();
             }
