@@ -111,6 +111,7 @@ buildNumber.properties
 
 # Common working directory
 run/
+src/test
 
 # vscode
 .settings/

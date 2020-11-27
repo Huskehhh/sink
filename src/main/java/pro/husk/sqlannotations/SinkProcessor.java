@@ -1,6 +1,7 @@
 package pro.husk.sqlannotations;
 
 import lombok.Getter;
+import lombok.Setter;
 import pro.husk.mysql.MySQL;
 import pro.husk.sqlannotations.annotations.DatabaseInfo;
 import pro.husk.sqlannotations.annotations.DatabaseValue;
@@ -25,7 +26,6 @@ public class SinkProcessor {
 
     @Getter
     private final Map<String, Field> databaseValues = new HashMap<>();
-    private final Map<Field, String> fieldValueCache = new HashMap<>();
 
     private final MySQL mySQL;
     private final AnnotatedSQLMember member;
@@ -40,7 +40,8 @@ public class SinkProcessor {
     private String uniqueKeyEntryName;
     private Field uniqueKeyField;
 
-    private boolean dirty;
+    @Setter
+    private boolean dirty = true;
 
     @Getter
     private final SerialisationResolver serialisationResolver;
@@ -116,12 +117,8 @@ public class SinkProcessor {
         updateTask.cancel(false);
     }
 
-    private String resolveFromCache(Field field) {
-        return fieldValueCache.get(field);
-    }
-
     private String getUniqueKeyValue() {
-        return resolveFromCache(uniqueKeyField);
+        return serialisationResolver.resolve(uniqueKeyField);
     }
 
     private String buildSelect() {
@@ -143,15 +140,14 @@ public class SinkProcessor {
         insert.append("INSERT INTO `").append(dbName).append("`.`").append(dbTable).append("` (`").append(uniqueKeyEntryName).append("`, ");
 
         LinkedList<String> valueList = new LinkedList<>();
-        Map<String, Field> dirtyMap = getDirtyFields();
 
         // Append the entries
         int index = 0;
-        int entrySetSize = dirtyMap.size();
-        for (Map.Entry<String, Field> entry : dirtyMap.entrySet()) {
+        int entrySetSize = databaseValues.size();
+        for (Map.Entry<String, Field> entry : databaseValues.entrySet()) {
             String dbKey = entry.getKey();
             Field field = entry.getValue();
-            String value = resolveFromCache(field);
+            String value = serialisationResolver.resolve(field);
 
             // Push to our linked list
             valueList.add(value);
@@ -192,15 +188,13 @@ public class SinkProcessor {
 
         update.append("UPDATE ");
 
-        Map<String, Field> dirtyMap = getDirtyFields();
-
         int index = 0;
-        int entrySetSize = dirtyMap.size();
+        int entrySetSize = databaseValues.size();
 
-        for (Map.Entry<String, Field> entry : dirtyMap.entrySet()) {
+        for (Map.Entry<String, Field> entry : databaseValues.entrySet()) {
             String dbKey = entry.getKey();
             Field field = entry.getValue();
-            String value = resolveFromCache(field);
+            String value = serialisationResolver.resolve(field);
 
             update.append("`").append(dbKey).append("` = ").append(value);
 
@@ -213,30 +207,5 @@ public class SinkProcessor {
         }
 
         return update.toString();
-    }
-
-    private Map<String, Field> getDirtyFields() {
-        Map<String, Field> dirtyFieldMap = new HashMap<>();
-
-        for (Map.Entry<String, Field> entry : databaseValues.entrySet()) {
-            String dbKey = entry.getKey();
-            Field field = entry.getValue();
-
-            String cachedValue = resolveFromCache(field);
-            String actualValue = serialisationResolver.resolve(field);
-
-            if (cachedValue == null || !cachedValue.equalsIgnoreCase(actualValue)) {
-                // Cache the value of the field
-                fieldValueCache.put(field, actualValue);
-
-                // Then add the dirty field to the map (so it gets saved)
-                dirtyFieldMap.put(dbKey, field);
-            }
-        }
-
-        // Mark as dirty, so we get updated
-        if (dirtyFieldMap.size() != 0) dirty = true;
-
-        return dirtyFieldMap;
     }
 }
