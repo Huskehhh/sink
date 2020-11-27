@@ -7,10 +7,12 @@ import pro.husk.sqlannotations.annotations.DatabaseValue;
 import pro.husk.sqlannotations.annotations.UniqueKey;
 
 import java.lang.reflect.Field;
+import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
@@ -42,14 +44,32 @@ public class SinkProcessor {
 
     private final ScheduledFuture<?> updateTaskFuture;
 
-    public SinkProcessor(AnnotatedSQLMember member) {
+    public SinkProcessor(AnnotatedSQLMember member, Runnable loadFromDatabaseCallback) {
         this.member = member;
         this.mySQL = member.getMySQL();
         this.serialisationResolver = new SerialisationResolver(member);
         initialise();
 
+        CompletableFuture.runAsync(this::loadFromDatabase, threadPoolExecutor).thenRun(loadFromDatabaseCallback);
+
         // Schedule to run every 10 seconds
-        updateTaskFuture = threadPoolExecutor.scheduleAtFixedRate(this::runUpdateAsync, 10, 10, TimeUnit.SECONDS);
+        updateTaskFuture = threadPoolExecutor
+                .scheduleAtFixedRate(this::runUpdateAsync, 10, 10, TimeUnit.SECONDS);
+    }
+
+    private void loadFromDatabase() {
+        try {
+            ResultSet results = mySQL.query(buildSelect());
+            results.next();
+            for (Map.Entry<String, Field> entry : databaseValues.entrySet()) {
+                String dbKey = entry.getKey();
+                Field field = entry.getValue();
+                Object dbValue = results.getObject(dbKey);
+                field.set(member, dbValue);
+            }
+        } catch (SQLException | IllegalAccessException throwables) {
+            throwables.printStackTrace();
+        }
     }
 
     public void cancelUpdateTask() {
@@ -81,6 +101,7 @@ public class SinkProcessor {
         }
     }
 
+
     public void runUpdateAsync() {
         try {
             mySQL.update(buildInsert());
@@ -95,6 +116,19 @@ public class SinkProcessor {
 
     private String getUniqueKeyValue() {
         return resolve(uniqueKeyField);
+    }
+
+    private String buildSelect() {
+        return "SELECT " +
+                String.join(",", databaseValues.keySet()) +
+                " FROM `" +
+                dbName +
+                "`.`" +
+                dbTable +
+                "` WHERE `" +
+                uniqueKeyEntryName +
+                "` = " +
+                getUniqueKeyValue();
     }
 
     public String buildInsert() {
