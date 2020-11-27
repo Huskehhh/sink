@@ -25,6 +25,7 @@ public class SinkProcessor {
 
     @Getter
     private final Map<String, Field> databaseValues = new HashMap<>();
+    private final Map<Field, String> fieldValueCache = new HashMap<>();
 
     private final MySQL mySQL;
     private final AnnotatedSQLMember member;
@@ -39,10 +40,12 @@ public class SinkProcessor {
     private String uniqueKeyEntryName;
     private Field uniqueKeyField;
 
+    private boolean dirty;
+
     @Getter
     private final SerialisationResolver serialisationResolver;
 
-    private final ScheduledFuture<?> updateTaskFuture;
+    private final ScheduledFuture<?> updateTask;
 
     public SinkProcessor(AnnotatedSQLMember member, Runnable loadFromDatabaseCallback) {
         this.member = member;
@@ -53,11 +56,11 @@ public class SinkProcessor {
         CompletableFuture.runAsync(this::loadFromDatabase, threadPoolExecutor).thenRun(loadFromDatabaseCallback);
 
         // Schedule to run every 10 seconds
-        updateTaskFuture = threadPoolExecutor
+        updateTask = threadPoolExecutor
                 .scheduleAtFixedRate(this::runUpdateAsync, 10, 10, TimeUnit.SECONDS);
     }
 
-    private void loadFromDatabase() {
+    public void loadFromDatabase() {
         try {
             ResultSet results = mySQL.query(buildSelect());
             results.next();
@@ -70,10 +73,7 @@ public class SinkProcessor {
         } catch (SQLException | IllegalAccessException throwables) {
             throwables.printStackTrace();
         }
-    }
-
-    public void cancelUpdateTask() {
-        updateTaskFuture.cancel(false);
+        dirty = false;
     }
 
     private void initialise() {
@@ -102,19 +102,25 @@ public class SinkProcessor {
     }
 
     public void runUpdateAsync() {
-        try {
-            mySQL.update(buildInsert());
-        } catch (SQLException throwables) {
-            throwables.printStackTrace();
+        if (dirty) {
+            try {
+                mySQL.update(buildInsert());
+            } catch (SQLException throwables) {
+                throwables.printStackTrace();
+            }
         }
     }
 
-    private String resolve(Field field) {
-        return serialisationResolver.resolve(field);
+    public void cancelUpdateTask() {
+        updateTask.cancel(false);
+    }
+
+    private String resolveFromCache(Field field) {
+        return fieldValueCache.get(field);
     }
 
     private String getUniqueKeyValue() {
-        return resolve(uniqueKeyField);
+        return resolveFromCache(uniqueKeyField);
     }
 
     private String buildSelect() {
@@ -136,14 +142,15 @@ public class SinkProcessor {
         insert.append("INSERT INTO `").append(dbName).append("`.`").append(dbTable).append("` (`").append(uniqueKeyEntryName).append("`, ");
 
         LinkedList<String> valueList = new LinkedList<>();
+        Map<String, Field> dirtyMap = getDirtyFields();
 
         // Append the entries
         int index = 0;
-        int entrySetSize = databaseValues.entrySet().size();
-        for (Map.Entry<String, Field> entry : databaseValues.entrySet()) {
+        int entrySetSize = dirtyMap.size();
+        for (Map.Entry<String, Field> entry : dirtyMap.entrySet()) {
             String dbKey = entry.getKey();
             Field field = entry.getValue();
-            String value = resolve(field);
+            String value = resolveFromCache(field);
 
             // Push to our linked list
             valueList.add(value);
@@ -170,7 +177,12 @@ public class SinkProcessor {
             if (index + 1 != valueListSize) {
                 insert.append(", ");
             } else {
-                insert.append(") ON DUPLICATE KEY ").append(buildUpdate()).append(";");
+                String update = buildUpdate();
+                insert.append(")");
+
+                if (update != null) {
+                    insert.append(" ON DUPLICATE KEY ").append(buildUpdate()).append(";");
+                }
             }
 
             index++;
@@ -184,12 +196,17 @@ public class SinkProcessor {
 
         update.append("UPDATE ");
 
+        Map<String, Field> dirtyMap = getDirtyFields();
+
         int index = 0;
-        int entrySetSize = databaseValues.entrySet().size();
-        for (Map.Entry<String, Field> entry : databaseValues.entrySet()) {
+        int entrySetSize = dirtyMap.size();
+
+        if (entrySetSize == 0) return null;
+
+        for (Map.Entry<String, Field> entry : dirtyMap.entrySet()) {
             String dbKey = entry.getKey();
             Field field = entry.getValue();
-            String value = resolve(field);
+            String value = resolveFromCache(field);
 
             update.append("`").append(dbKey).append("` = ").append(value);
 
@@ -202,5 +219,30 @@ public class SinkProcessor {
         }
 
         return update.toString();
+    }
+
+    private Map<String, Field> getDirtyFields() {
+        Map<String, Field> dirtyFieldMap = new HashMap<>();
+
+        for (Map.Entry<String, Field> entry : databaseValues.entrySet()) {
+            String dbKey = entry.getKey();
+            Field field = entry.getValue();
+
+            String cachedValue = resolveFromCache(field);
+            String actualValue = serialisationResolver.resolve(field);
+
+            if (cachedValue == null || !cachedValue.equalsIgnoreCase(actualValue)) {
+                // Cache the value of the field
+                fieldValueCache.put(field, actualValue);
+
+                // Then add the dirty field to the map (so it gets saved)
+                dirtyFieldMap.put(dbKey, field);
+            }
+        }
+
+        // Mark as dirty, so we get updated
+        if (dirtyFieldMap.size() != 0) dirty = true;
+
+        return dirtyFieldMap;
     }
 }
