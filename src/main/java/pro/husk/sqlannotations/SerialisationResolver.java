@@ -14,7 +14,7 @@ public class SerialisationResolver {
     @Getter
     private final Map<Class<?>, Function<Field, String>> serialisationResolver;
 
-    AnnotatedSQLMember member;
+    private final AnnotatedSQLMember member;
 
     public SerialisationResolver(AnnotatedSQLMember member) {
         this.serialisationResolver = new HashMap<>();
