@@ -101,7 +101,6 @@ public class SinkProcessor {
         }
     }
 
-
     public void runUpdateAsync() {
         try {
             mySQL.update(buildInsert());
@@ -131,7 +130,7 @@ public class SinkProcessor {
                 getUniqueKeyValue();
     }
 
-    public String buildInsert() {
+    private String buildInsert() {
         StringBuilder insert = new StringBuilder();
 
         insert.append("INSERT INTO `").append(dbName).append("`.`").append(dbTable).append("` (`").append(uniqueKeyEntryName).append("`, ");
