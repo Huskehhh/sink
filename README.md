@@ -68,7 +68,7 @@ public class SinkExampleObject implements AnnotatedSQLMember {
 ```java
 package pro.husk.example;
 
-import pro.husk.sqlannotations.AnnotationProcessor;
+import pro.husk.sqlannotations.SinkProcessor;
 
 public class Sink {
 
@@ -76,8 +76,8 @@ public class Sink {
         // Create our example object
         SinkExampleObject sinkExampleObject = new SinkExampleObject(1, "Bob", 10);
 
-        // Register our class to be processed by the annotation processor
-        AnnotationProcessor annotationProcessor = new AnnotationProcessor(sinkExampleObject);
+        // Register our class to be processed
+        SinkProcessor sinkProcessor = new SinkProcessor(sinkExampleObject);
 
         // That's it, it will now automatically sync to the database
     }

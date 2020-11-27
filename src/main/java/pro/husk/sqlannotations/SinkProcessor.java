@@ -16,7 +16,7 @@ import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 
-public class AnnotationProcessor {
+public class SinkProcessor {
 
     public static ScheduledThreadPoolExecutor threadPoolExecutor =
             (ScheduledThreadPoolExecutor) Executors.newScheduledThreadPool(5);
@@ -42,7 +42,7 @@ public class AnnotationProcessor {
 
     private final ScheduledFuture<?> updateTaskFuture;
 
-    public AnnotationProcessor(AnnotatedSQLMember member) {
+    public SinkProcessor(AnnotatedSQLMember member) {
         this.member = member;
         this.mySQL = member.getMySQL();
         this.serialisationResolver = new SerialisationResolver(member);
