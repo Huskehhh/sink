@@ -42,7 +42,7 @@ public class SinkExampleObject implements AnnotatedSQLMember {
     private MySQL mysql;
 
     @UniqueKey("user-id")
-    private int userId;
+    private final int userId;
 
     @DatabaseValue("username")
     private String username;
@@ -77,9 +77,11 @@ public class Sink {
         SinkExampleObject sinkExampleObject = new SinkExampleObject(1, "Bob", 10);
 
         // Register our class to be processed
-        SinkProcessor sinkProcessor = new SinkProcessor(sinkExampleObject);
+        SinkProcessor sinkProcessor = new SinkProcessor(sinkExampleObject, () -> {
+            System.out.println("Data has been loaded!");
+        });
 
-        // That's it, it will now automatically sync to the database
+        // That's it, it will now automatically sync to the database from now on
     }
 
 }
