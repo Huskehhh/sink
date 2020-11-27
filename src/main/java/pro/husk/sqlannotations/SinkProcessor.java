@@ -24,19 +24,14 @@ public class SinkProcessor {
     public static ScheduledThreadPoolExecutor threadPoolExecutor =
             (ScheduledThreadPoolExecutor) Executors.newScheduledThreadPool(5);
 
-    @Getter
     private final Map<String, Field> databaseValues = new HashMap<>();
 
     private final MySQL mySQL;
     private final AnnotatedSQLMember member;
 
-    @Getter
     private String dbName;
-
-    @Getter
     private String dbTable;
 
-    @Getter
     private String uniqueKeyEntryName;
     private Field uniqueKeyField;
 
@@ -48,16 +43,19 @@ public class SinkProcessor {
 
     private final ScheduledFuture<?> updateTask;
 
-    public SinkProcessor(AnnotatedSQLMember member, Runnable loadFromDatabaseCallback) {
+    @Getter
+    private final CompletableFuture<?> loadFromDatabaseFuture;
+
+    public SinkProcessor(AnnotatedSQLMember member) {
         this.member = member;
         this.mySQL = member.getMySQL();
         this.serialisationResolver = new SerialisationResolver(member);
-        initialise();
+        this.initialise();
 
-        CompletableFuture.runAsync(this::loadFromDatabase, threadPoolExecutor).thenRun(loadFromDatabaseCallback);
+        this.loadFromDatabaseFuture = CompletableFuture.runAsync(this::loadFromDatabase, threadPoolExecutor);
 
         // Schedule to run every 10 seconds
-        updateTask = threadPoolExecutor
+        this.updateTask = threadPoolExecutor
                 .scheduleAtFixedRate(this::runUpdateAsync, 10, 10, TimeUnit.SECONDS);
     }
 
