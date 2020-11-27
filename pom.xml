@@ -50,6 +50,10 @@
                                     <pattern>pro.husk.database</pattern>
                                     <shadedPattern>pro.husk.sqlannotations.database</shadedPattern>
                                 </relocation>
+                                <relocation>
+                                    <pattern>com.mysql</pattern>
+                                    <shadedPattern>pro.husk.sqlannotations.database</shadedPattern>
+                                </relocation>
                             </relocations>
                         </configuration>
                     </execution>
