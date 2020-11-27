@@ -178,12 +178,7 @@ public class SinkProcessor {
             if (index + 1 != valueListSize) {
                 insert.append(", ");
             } else {
-                String update = buildUpdate();
-                insert.append(")");
-
-                if (update != null) {
-                    insert.append(" ON DUPLICATE KEY ").append(buildUpdate()).append(";");
-                }
+                insert.append(") ON DUPLICATE KEY ").append(buildUpdate()).append(";");
             }
 
             index++;
@@ -201,8 +196,6 @@ public class SinkProcessor {
 
         int index = 0;
         int entrySetSize = dirtyMap.size();
-
-        if (entrySetSize == 0) return null;
 
         for (Map.Entry<String, Field> entry : dirtyMap.entrySet()) {
             String dbKey = entry.getKey();
