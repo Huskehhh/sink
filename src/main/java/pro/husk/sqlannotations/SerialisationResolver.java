@@ -7,6 +7,7 @@ import java.lang.reflect.Field;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
+import java.util.UUID;
 import java.util.function.Function;
 
 public class SerialisationResolver {
@@ -19,6 +20,40 @@ public class SerialisationResolver {
     public SerialisationResolver(AnnotatedSQLMember member) {
         this.serialisationResolver = new HashMap<>();
         this.member = member;
+
+        addDefaultResolvers();
+    }
+
+    private void addDefaultResolvers() {
+        addResolver(boolean.class, (field) -> {
+            field.setAccessible(true);
+
+            try {
+                Boolean bool = (Boolean) field.get(member);
+                return bool ? "1" : "0";
+            } catch (IllegalAccessException e) {
+                e.printStackTrace();
+            }
+
+            return null;
+        });
+
+        addResolver(UUID.class, (field) -> {
+            field.setAccessible(true);
+
+            UUID uuid = null;
+            try {
+                uuid = (UUID) field.get(member);
+            } catch (IllegalAccessException e) {
+                e.printStackTrace();
+            }
+
+            if (uuid == null) {
+                uuid = new UUID(0L, 0L);
+            }
+
+            return "'" + uuid.toString() + "'";
+        });
     }
 
     @SneakyThrows

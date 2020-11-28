@@ -56,18 +56,22 @@ public class SinkProcessor {
 
         // Schedule to run every 10 seconds
         this.updateTask = threadPoolExecutor
-                .scheduleAtFixedRate(this::runUpdateAsync, 10, 10, TimeUnit.SECONDS);
+                .scheduleAtFixedRate(this::runUpdate, 10, 10, TimeUnit.SECONDS);
     }
 
     public void loadFromDatabase() {
         try {
-            ResultSet results = mySQL.query(buildSelect());
-            results.next();
-            for (Map.Entry<String, Field> entry : databaseValues.entrySet()) {
-                String dbKey = entry.getKey();
-                Field field = entry.getValue();
-                Object dbValue = results.getObject(dbKey);
-                field.set(member, dbValue);
+            String query = buildSelect();
+            ResultSet results = mySQL.query(query);
+            if (results.next()) {
+                for (Map.Entry<String, Field> entry : databaseValues.entrySet()) {
+                    String dbKey = entry.getKey();
+                    Field field = entry.getValue();
+                    Object dbValue = results.getObject(dbKey);
+                    field.set(member, dbValue);
+                }
+            } else {
+                runUpdate();
             }
         } catch (SQLException | IllegalAccessException throwables) {
             throwables.printStackTrace();
@@ -100,13 +104,15 @@ public class SinkProcessor {
         }
     }
 
-    public void runUpdateAsync() {
+    public void runUpdate() {
         if (dirty) {
+            String insert = buildInsert();
             try {
-                mySQL.update(buildInsert());
-                dirty = false;
+                mySQL.update(insert);
             } catch (SQLException throwables) {
                 throwables.printStackTrace();
+            } finally {
+                dirty = false;
             }
         }
     }
@@ -120,9 +126,9 @@ public class SinkProcessor {
     }
 
     private String buildSelect() {
-        return "SELECT " +
-                String.join(",", databaseValues.keySet()) +
-                " FROM `" +
+        return "SELECT `" +
+                String.join("`, `", databaseValues.keySet()) +
+                "` FROM `" +
                 dbName +
                 "`.`" +
                 dbTable +
@@ -151,7 +157,7 @@ public class SinkProcessor {
             valueList.add(value);
 
             // Append the db key
-            insert.append(dbKey);
+            insert.append("`").append(dbKey).append("`");
 
             // Don't append the comma if this is the last entry in set
             if (index + 1 != entrySetSize) {
