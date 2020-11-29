@@ -99,3 +99,28 @@ public class Sink {
 
 }
 ```
+
+### Extension
+
+It is possible to add your own serialisation resolver to help turn your custom objects into string friendly output ready for storage.
+
+Example:
+
+```java
+        addResolver(UUID.class, (field) -> {
+            field.setAccessible(true);
+
+            UUID uuid = null;
+            try {
+                uuid = (UUID) field.get(member);
+            } catch (IllegalAccessException e) {
+                e.printStackTrace();
+            }
+
+            if (uuid == null) {
+                uuid = new UUID(0L, 0L);
+            }
+
+            return "'" + uuid.toString() + "'";
+        });
+```
