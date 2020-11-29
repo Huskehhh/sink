@@ -47,9 +47,7 @@ public class SinkProcessor {
 
         this.loadFromDatabaseFuture = CompletableFuture
                 .runAsync(this::loadFromDatabase, globalSinkProcessor.getThreadPoolExecutor())
-                .thenRun(() -> {
-                    globalSinkProcessor.getProcessorList().add(this);
-                });
+                .thenRun(() -> globalSinkProcessor.getProcessorList().add(this));
     }
 
     public void loadFromDatabase() {
