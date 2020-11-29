@@ -14,15 +14,8 @@ import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledFuture;
-import java.util.concurrent.ScheduledThreadPoolExecutor;
-import java.util.concurrent.TimeUnit;
 
 public class SinkProcessor {
-
-    public static ScheduledThreadPoolExecutor threadPoolExecutor =
-            (ScheduledThreadPoolExecutor) Executors.newScheduledThreadPool(5);
 
     private final Map<String, Field> databaseValues = new HashMap<>();
 
@@ -41,8 +34,6 @@ public class SinkProcessor {
     @Getter
     private final SerialisationResolver serialisationResolver;
 
-    private final ScheduledFuture<?> updateTask;
-
     @Getter
     private final CompletableFuture<?> loadFromDatabaseFuture;
 
@@ -52,11 +43,13 @@ public class SinkProcessor {
         this.serialisationResolver = new SerialisationResolver(member);
         this.initialise();
 
-        this.loadFromDatabaseFuture = CompletableFuture.runAsync(this::loadFromDatabase, threadPoolExecutor);
+        GlobalSinkProcessor globalSinkProcessor = GlobalSinkProcessor.getInstance();
 
-        // Schedule to run every 10 seconds
-        this.updateTask = threadPoolExecutor
-                .scheduleAtFixedRate(this::runUpdate, 10, 10, TimeUnit.SECONDS);
+        this.loadFromDatabaseFuture = CompletableFuture
+                .runAsync(this::loadFromDatabase, globalSinkProcessor.getThreadPoolExecutor())
+                .thenRun(() -> {
+                    globalSinkProcessor.getProcessorList().add(this);
+                });
     }
 
     public void loadFromDatabase() {
@@ -115,10 +108,6 @@ public class SinkProcessor {
                 dirty = false;
             }
         }
-    }
-
-    public void cancelUpdateTask() {
-        updateTask.cancel(false);
     }
 
     private String getUniqueKeyValue() {
