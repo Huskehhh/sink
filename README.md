@@ -32,6 +32,7 @@ and...
 ```java
 package pro.husk.example;
 
+import pro.husk.sqlannotations.SinkProcessor;
 import pro.husk.sqlannotations.annotations.DatabaseInfo;
 import pro.husk.sqlannotations.annotations.DatabaseValue;
 import pro.husk.sqlannotations.annotations.UniqueKey;
@@ -50,15 +51,31 @@ public class SinkExampleObject implements AnnotatedSQLMember {
     @DatabaseValue("age")
     private int age;
 
+    private SinkProcessor sinkProcessor;
+
     public SinkExampleObject(MySQL mysql, int userId, String username, int age) {
         this.userId = userId;
         this.username = username;
         this.age = age;
+
+        // Register our class to be processed
+        this.sinkProcessor = new SinkProcessor(this);
+
+        // Do something once the database values are loaded (or defaults are inserted)
+        sinkProcessor.getLoadFromDatabaseFuture().thenRun(() ->
+                System.out.println("Data has been loaded!"));
     }
 
     @Override
     public void getMySQL() {
         return this.mysql;
+    }
+
+    public void setAge(int age) {
+        this.age = age;
+
+        // Flag our object to be updated
+        sinkProcessor.setDirty(true);
     }
 }
 ```
@@ -76,12 +93,8 @@ public class Sink {
         // Create our example object
         SinkExampleObject sinkExampleObject = new SinkExampleObject(1, "Bob", 10);
 
-        // Register our class to be processed
-        SinkProcessor sinkProcessor = new SinkProcessor(sinkExampleObject, () -> {
-            System.out.println("Data has been loaded!");
-        });
-
-        // That's it, it will now automatically sync to the database from now on
+        // Now we can call setAge for example, and it will automatically sync to db
+        sinkExampleObject.setAge(10);
     }
 
 }
