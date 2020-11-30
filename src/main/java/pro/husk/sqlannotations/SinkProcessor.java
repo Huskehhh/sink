@@ -13,8 +13,10 @@ import java.sql.SQLException;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 
+/**
+ * Class to process annotations and their attached fields
+ */
 public class SinkProcessor {
 
     private final Map<String, Field> databaseValues = new HashMap<>();
@@ -28,28 +30,36 @@ public class SinkProcessor {
     private String uniqueKeyEntryName;
     private Field uniqueKeyField;
 
+    /**
+     * Provides access to mark the SinkProcessor as dirty, causing it to be saved to db
+     */
     @Setter
     private boolean dirty = true;
 
+    /**
+     * Provides access to the serialisation resolver, for those who wish to add their own resolvers
+     */
     @Getter
     private final SerialisationResolver serialisationResolver;
 
-    @Getter
-    private final CompletableFuture<?> loadFromDatabaseFuture;
-
-    public SinkProcessor(AnnotatedSQLMember member) {
+    /**
+     * Constructor
+     *
+     * @param member          Annotated class
+     * @param finishedLoading task to run once finished loading
+     */
+    public SinkProcessor(AnnotatedSQLMember member, Runnable finishedLoading) {
         this.member = member;
         this.mySQL = member.getMySQL();
         this.serialisationResolver = new SerialisationResolver(member);
         this.initialise();
 
-        GlobalSinkProcessor globalSinkProcessor = GlobalSinkProcessor.getInstance();
-
-        this.loadFromDatabaseFuture = CompletableFuture
-                .runAsync(this::loadFromDatabase, globalSinkProcessor.getThreadPoolExecutor())
-                .thenRun(() -> globalSinkProcessor.getProcessorList().add(this));
+        GlobalSinkProcessor.getInstance().registerSinkProcessor(this, finishedLoading);
     }
 
+    /**
+     * Method to force a reload from database, replaces currently cached values with values from DB
+     */
     public void loadFromDatabase() {
         try {
             String query = buildSelect();
@@ -70,6 +80,9 @@ public class SinkProcessor {
         dirty = false;
     }
 
+    /**
+     * Method to initialise the SinkProcessor, loading annotated attributes and their values
+     */
     private void initialise() {
         DatabaseInfo databaseInfo = member.getClass().getAnnotation(DatabaseInfo.class);
 
@@ -95,6 +108,12 @@ public class SinkProcessor {
         }
     }
 
+    /**
+     * Method to run an update to database
+     * <p>
+     * Provides ability to overwrite database if needed.
+     * Note: must be marked dirty first
+     */
     public void runUpdate() {
         if (dirty) {
             String insert = buildInsert();
@@ -108,10 +127,20 @@ public class SinkProcessor {
         }
     }
 
+    /**
+     * Helper method to resolve the unique key field value
+     *
+     * @return String value of UniqueKey field
+     */
     private String getUniqueKeyValue() {
         return serialisationResolver.resolve(uniqueKeyField);
     }
 
+    /**
+     * Helper method to build the SELECT query for loading from database
+     *
+     * @return String of SELECT query
+     */
     private String buildSelect() {
         return "SELECT `" +
                 String.join("`, `", databaseValues.keySet()) +
@@ -125,6 +154,11 @@ public class SinkProcessor {
                 getUniqueKeyValue();
     }
 
+    /**
+     * Helper method to build the INSERT + UPDATE query for saving to database
+     *
+     * @return String of INSERT + UPDATE
+     */
     private String buildInsert() {
         StringBuilder insert = new StringBuilder();
 
@@ -174,6 +208,11 @@ public class SinkProcessor {
         return insert.toString();
     }
 
+    /**
+     * Helper method to build the UPDATE portion of the INSERT query on duplicate key
+     *
+     * @return String of UPDATE
+     */
     private String buildUpdate() {
         StringBuilder update = new StringBuilder();
 

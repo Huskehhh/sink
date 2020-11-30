@@ -4,6 +4,7 @@ import lombok.Getter;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
@@ -30,6 +31,14 @@ public class GlobalSinkProcessor {
         this.processorList = new ArrayList<>();
         this.updateTask = threadPoolExecutor
                 .scheduleAtFixedRate(this::runUpdates, 10, 10, TimeUnit.SECONDS);
+    }
+
+    public void registerSinkProcessor(SinkProcessor sinkProcessor, Runnable finishedLoadingTask) {
+        CompletableFuture
+                .runAsync(sinkProcessor::loadFromDatabase, threadPoolExecutor)
+                .thenRun(() -> {
+            processorList.add(sinkProcessor);
+        }).thenRun(finishedLoadingTask);
     }
 
     private void runUpdates() {
