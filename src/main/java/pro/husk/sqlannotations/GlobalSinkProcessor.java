@@ -34,11 +34,9 @@ public class GlobalSinkProcessor {
     }
 
     public void registerSinkProcessor(SinkProcessor sinkProcessor, Runnable finishedLoadingTask) {
-        CompletableFuture
+        sinkProcessor.setLoadFuture(CompletableFuture
                 .runAsync(sinkProcessor::loadFromDatabase, threadPoolExecutor)
-                .thenRun(() -> {
-            processorList.add(sinkProcessor);
-        }).thenRun(finishedLoadingTask);
+                .thenRun(() -> processorList.add(sinkProcessor)).thenRun(finishedLoadingTask));
     }
 
     private void runUpdates() {

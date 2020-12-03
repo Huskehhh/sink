@@ -13,6 +13,7 @@ import java.sql.SQLException;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 
 /**
  * Class to process annotations and their attached fields
@@ -41,6 +42,10 @@ public class SinkProcessor {
      */
     @Getter
     private final SerialisationResolver serialisationResolver;
+
+    @Getter
+    @Setter
+    private CompletableFuture<?> loadFuture;
 
     /**
      * Constructor
